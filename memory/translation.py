@@ -4,16 +4,20 @@ class MemoryManager:
     """Manages physical memory allocation (at MB level for simple simulation, 
     and at Frame level for Paging/Segmentation).
     """
-    def __init__(self, total_capacity_mb=512, frame_size_kb=4):
-        self.total_capacity = total_capacity_mb
+    def __init__(self, total_capacity_mb=512, frame_size_kb=4, total_memory=None):
+        self.total_capacity = total_memory if total_memory is not None else total_capacity_mb
         self.allocated_memory = 0
         self.allocations = {}  # pid -> memory_mb
         
         # Frame-level Paging fields
         self.frame_size_kb = frame_size_kb
-        self.total_frames = (total_capacity_mb * 1024) // frame_size_kb
+        self.total_frames = (self.total_capacity * 1024) // frame_size_kb
         self.free_frames = list(range(self.total_frames))
         self.frame_map = {}   # frame_number -> (pid, page_number)
+
+    @property
+    def free_memory(self):
+        return self.total_capacity - self.allocated_memory
         
     def allocate(self, process, log_callback):
         """Simple process-level allocation (used by standard schedulers)."""

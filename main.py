@@ -20,6 +20,7 @@ from core.scheduler import (
     run_mlfq, 
     simulate_priority_inversion_scenario
 )
+from core.scenarios import simulate_io_blocking_scenario, simulate_oom_killer_scenario
 from memory.translation import MemoryManager
 from memory.segmentation import SegmentationSystem
 from memory.paging import PagingSystem
@@ -59,6 +60,8 @@ def show_menu():
         "  [bold green]7.[/bold green] Depolama: Disk Schedulers, RAID 0/1 & Journaled FS (Crash Consistency) - [yellow]Modül 12, 13, 14, 15[/yellow]\n"
         "  [bold green]8.[/bold green] SSD vs HDD Performans Karşılaştırma Analizi - [yellow]Modül 16[/yellow]\n"
         "  [bold green]9.[/bold green] TÜM Grafiksel PNG Raporlarını Yeniden Oluştur (Generate Plots)\n"
+        "  [bold green]10.[/bold green] Çapraz Bileşen Etkileşimi (Disk I/O Blocking) - [yellow]Modül 2, 12, Tasarım[/yellow]\n"
+        "  [bold green]11.[/bold green] Hata Senaryosu (OOM Killer / Bellek Tükenmesi) - [yellow]Modül 3, Tasarım[/yellow]\n"
         "  [bold red]Q.[/bold red] Çıkış (Exit)"
     )
     console.print(Panel(menu_text, border_style="cyan", title="[bold white]=== Game Console OS Simulator Dashboard ===[/bold white]", box=box.ROUNDED))
@@ -410,7 +413,7 @@ def main():
     while True:
         try:
             show_menu()
-            choice = console.input("\n[bold yellow]Seçiminiz (1-9 veya Q): [/bold yellow]").strip().upper()
+            choice = console.input("\n[bold yellow]Seçiminiz (1-11 veya Q): [/bold yellow]").strip().upper()
             
             if choice == "Q":
                 console.print("\n[bold green]Simulator Kapatılıyor. İyi çalışmalar![/bold green]\n")
@@ -433,6 +436,10 @@ def main():
                 handle_ssd_hdd()
             elif choice == "9":
                 generate_all_plots()
+            elif choice == "10":
+                simulate_io_blocking_scenario(log_callback=console.print)
+            elif choice == "11":
+                simulate_oom_killer_scenario(log_callback=console.print)
             else:
                 console.print("\n[bold red]Geçersiz Seçim! Lütfen listeden bir rakam girin.[/bold red]")
                 
