@@ -9,29 +9,35 @@ class VirtualFile:
 class VirtualDirectory:
     def __init__(self, name):
         self.name = name
-        self.files = {}
-        self.subdirs = {}
+        self.files = {} # Klasör içindeki dosyalar (dosya_adı -> VirtualFile)
+        self.subdirs = {} # Alt klasörler (klasör_adı -> VirtualDirectory)
 
 
 class VirtualFileSystem:
     """Simulates a Hierarchical File System (Module 14)."""
     
     def __init__(self):
-        self.root = VirtualDirectory("/")
+        self.root = VirtualDirectory("/") # Kök dizin (Root Directory) oluşturuluyor
         
     def _parse_path(self, path):
         """Splits path into components. Returns list of directory names."""
-        parts = [p for p in path.split("/") if p]
+        # Dosya yolunu parçalara ayırıyoruz (Örn: "/user/saves" -> ["user", "saves"])
+        # Liste üreteci (list comprehension) yerine standart bir döngü kullanılmıştır
+        parts = []
+        for p in path.split("/"):
+            if p:
+                parts.append(p)
         return parts
 
     def _resolve_dir(self, path_parts):
         """Walks directory tree. Returns VirtualDirectory if valid, or None."""
+        # Verilen dizin yolunu kök dizinden başlayarak adım adım geziyoruz (Tree Walk)
         current = self.root
         for part in path_parts:
             if part in current.subdirs:
                 current = current.subdirs[part]
             else:
-                return None
+                return None # Alt dizin bulunamazsa None döner
         return current
 
     def mkdir(self, path):
@@ -47,7 +53,7 @@ class VirtualFileSystem:
         
         parent_dir = self._resolve_dir(parent_parts)
         if parent_dir is None:
-            # Recursively create parent directories
+            # Üst dizinler mevcut değilse onları sırasıyla özyinelemeli/otomatik oluşturuyoruz
             current = self.root
             for part in parent_parts:
                 if part not in current.subdirs:
@@ -72,10 +78,11 @@ class VirtualFileSystem:
         
         parent_dir = self._resolve_dir(parent_parts)
         if parent_dir is None:
-            # Create parents
+            # Üst klasör yoksa önce onu oluşturuyoruz
             self.mkdir("/" + "/".join(parent_parts))
             parent_dir = self._resolve_dir(parent_parts)
             
+        # Dosyayı ilgili klasörün dosyalar sözlüğüne kaydediyoruz
         parent_dir.files[file_name] = VirtualFile(file_name, content)
         return True, f"Dosya oluşturuldu: {file_path} ({len(content)} byte)"
 
@@ -88,6 +95,7 @@ class VirtualFileSystem:
         parent_parts = parts[:-1]
         file_name = parts[-1]
         
+        # Dosyanın bulunduğu klasörü çözümleyip dosyayı arıyoruz
         parent_dir = self._resolve_dir(parent_parts)
         if parent_dir is not None and file_name in parent_dir.files:
             return parent_dir.files[file_name].content
@@ -110,6 +118,7 @@ class VirtualFileSystem:
 
     def get_structure(self):
         """Returns a string listing the entire directory structure (recursively)."""
+        # Tüm dizin ağacını derinlik öncelikli arama (DFS) mantığıyla gezerek ekrana basılacak formatta metin üretiyoruz
         lines = []
         def _walk(directory, depth=0):
             indent = "  " * depth

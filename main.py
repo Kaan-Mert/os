@@ -27,7 +27,7 @@ from memory.translation import MemoryManager
 from memory.segmentation import SegmentationSystem
 from memory.paging import PagingSystem
 from memory.tlb import TLBCache
-from memory.replacement import PageReplacementSimulator
+from memory.replacement import compare_algorithms as compare_page_replacement_algorithms
 from concurrency.locks import Mutex
 from concurrency.semaphores import ProducerConsumerSimulation
 from concurrency.multithreading import RaceConditionDemo
@@ -266,7 +266,7 @@ def handle_paging_tlb():
         table.add_row(hex(va), str(page_num), tlb_status, pt_status, frame_str, pa_str)
         
     console.print(table)
-    console.print(f"[OS LOG] [TLB İSTATİSTİK] Toplam Hit: {tlb_cache.hits} | Miss: {tlb_cache.misses} | [bold yellow]TLB Hit Oranı: {tlb_cache.hit_ratio*100:.1f}%[/bold yellow]")
+    console.print(f"[OS LOG] [TLB İSTATİSTİK] Toplam Hit: {tlb_cache.hits} | Miss: {tlb_cache.misses} | [bold yellow]TLB Hit Oranı: {tlb_cache.get_hit_ratio()*100:.1f}%[/bold yellow]")
 
 def handle_page_replacement():
     console.print("\n[bold yellow]>>> Modül 7: Sayfa Değiştirme (FIFO vs LRU)...[/bold yellow]")
@@ -275,7 +275,7 @@ def handle_page_replacement():
     ref_string = [1, 3, 0, 3, 5, 6, 3, 1, 3, 2, 1, 4, 5, 2]
     capacities = [2, 3, 4, 5]
     
-    results = PageReplacementSimulator.compare_algorithms(ref_string, capacities)
+    results = compare_page_replacement_algorithms(ref_string, capacities)
     
     # Plot fault rates
     PerformancePlotter.plot_page_replacement(capacities, results["fifo"], results["lru"], "page_faults.png")
@@ -333,8 +333,18 @@ def handle_concurrency_and_locks():
     table.add_column("Toplam Süre (Ticks)", style="yellow")
     table.add_column("Diagnostic Durum", style="white")
     
-    h_end_no_pip = next((p.end_time for p in inv_no_pip if p.pid == 12), "Kilitlendi / Starved")
-    h_end_pip = next((p.end_time for p in inv_pip if p.pid == 12), "N/A")
+    # Liste üretici ve next() yerine temel for döngüsü kullanıyoruz
+    h_end_no_pip = "Kilitlendi / Starved"
+    for p in inv_no_pip:
+        if p.pid == 12:
+            h_end_no_pip = str(p.end_time)
+            break
+            
+    h_end_pip = "N/A"
+    for p in inv_pip:
+        if p.pid == 12:
+            h_end_pip = str(p.end_time)
+            break
     
     table.add_row("PIP Olmadan (Tasarım Açığı)", str(h_end_no_pip), f"{dur_no_pip} tick", "[bold red]Kilitlenme (Gamepad/Engine Kilitli)[/bold red]")
     table.add_row("PIP İle (Öncelik Mirası Aktif)", f"{h_end_pip} (Kurtarıldı)", f"{dur_pip} tick", "[bold green]Sorun Çözüldü (Normal Akış)[/bold green]")
@@ -500,7 +510,7 @@ def generate_all_plots():
     # 2. Page Fault Chart
     ref_string = [1, 3, 0, 3, 5, 6, 3, 1, 3, 2, 1, 4, 5, 2]
     capacities = [2, 3, 4, 5]
-    results = PageReplacementSimulator.compare_algorithms(ref_string, capacities)
+    results = compare_page_replacement_algorithms(ref_string, capacities)
     PerformancePlotter.plot_page_replacement(capacities, results["fifo"], results["lru"], "page_faults.png")
     
     # 3. Disk Scheduling Chart

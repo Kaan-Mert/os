@@ -5,7 +5,6 @@ class SSDvsHDDAnalysis:
     Models rotational and seek latencies of mechanical hard drives vs flash memory.
     """
     
-    @staticmethod
     def simulate_hdd_time(requests, scheduling_algorithm="FCFS", head_start=50):
         """Simulates HDD timing using:
         - 7200 RPM Rotational Latency: ~4.17 ms (average)
@@ -16,47 +15,55 @@ class SSDvsHDDAnalysis:
         total_time_ms = 0.0
         pending = list(requests)
         
-        # Seek path determination
+        # Disk kafasının hareket sırasını belirliyoruz
         if scheduling_algorithm == "FCFS":
             path = pending
         elif scheduling_algorithm == "SSTF":
             path = []
             while pending:
-                closest = min(pending, key=lambda r: abs(r - current_head))
+                # Lambda yerine standart döngü ile en yakın disk isteğini arıyoruz
+                closest = pending[0]
+                min_dist = abs(closest - current_head)
+                for r in pending:
+                    dist = abs(r - current_head)
+                    if dist < min_dist:
+                        min_dist = dist
+                        closest = r
+                        
                 path.append(closest)
                 pending.remove(closest)
+                current_head = closest
         else:
             path = pending
             
+        current_head = head_start
         for req in path:
-            # 1. Seek time (proportional to cylinder distance)
+            # 1. Arama Süresi (Seek Time): Okuyucu kafanın silindirler arasındaki fiziksel hareketi
             distance = abs(req - current_head)
-            seek_time = distance * 0.08  # 0.08 ms per cylinder track
+            seek_time = distance * 0.08  # Silindir başına 0.08 milisaniye gecikme
             
-            # 2. Rotational latency
-            rotational_latency = 4.17  # Average delay for platter rotation (7200 RPM)
+            # 2. Dönme Gecikmesi (Rotational Latency): Diskin dönerek ilgili sektörü kafanın altına getirme süresi
+            rotational_latency = 4.17  # 7200 RPM disk için ortalama dönme süresi
             
-            # 3. Transfer time
+            # 3. Transfer Süresi (Transfer Time): Verinin disk plakasından okunup gönderilme süresi
             transfer_time = 0.1
             
-            # Total time per request
+            # Toplam I/O süresini biriktiriyoruz
             total_time_ms += (seek_time + rotational_latency + transfer_time)
             current_head = req
             
         return total_time_ms
 
-    @staticmethod
     def simulate_ssd_time(requests):
         """Simulates SSD timing (Flash memory, near-zero seek latency, no rotation).
         - Latency is near constant: ~0.1 ms access delay per request.
         """
-        # SSD time does not depend on request order (random access is identical to sequential)
-        access_latency_ms = 0.1
+        # SSD mekanik kafa barındırmadığı için arama ve dönme gecikmesi 0'dır, rasgele erişim süresi sabittir
+        access_latency_ms = 0.1 # Sabit elektronik erişim süresi
         transfer_time = 0.02
         return len(requests) * (access_latency_ms + transfer_time)
 
-    @classmethod
-    def get_comparison_discussion(cls):
+    def get_comparison_discussion():
         return (
             "[bold white]HDD vs SSD Karşılaştırma Raporu (Game Console OS Context):[/bold white]\n\n"
             "1. [bold yellow]Disk Schedulers (Disk Planlama):[/bold yellow]\n"
