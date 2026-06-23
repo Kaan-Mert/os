@@ -54,9 +54,9 @@ def get_fresh_workload():
 def show_menu():
     menu_text = (
         "[bold cyan]===== MİNİ İŞLETİM SİSTEMİ SİMÜLATÖRÜ =====[/bold cyan]\n"
-        "[bold green]\\[1][/bold green] Modül 1 & 2: Süreç Yönetimi (PCB) ve CPU Planlama (FCFS, RR, MLFQ)\n"
+        "[bold green]\\[1][/bold green] Modül 1 & 2: Süreç Yönetimi (PCB) ve CPU Planlama\n"
         "[bold green]\\[2][/bold green] Modül 3: Adres Çevirisi (Virtual to Physical)\n"
-        "[bold green]\\[3][/bold green] Modül 4: Segmentasyon (Segmentation)\n"
+        "[bold green]\\[3][/bold green] Modül 4: Segmentasyon\n"
         "[bold green]\\[4][/bold green] Modül 5 & 6: Sayfalama (Paging) ve TLB Simülasyonu\n"
         "[bold green]\\[5][/bold green] Modül 7: Sayfa Değiştirme (FIFO vs LRU)\n"
         "[bold green]\\[6][/bold green] Modül 8 & 9: Eşzamanlılık (Race Condition) ve Kilitler (Mutex)\n"
