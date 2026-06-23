@@ -7,10 +7,12 @@ Central Orchestrator & Interactive CLI Dashboard
 import sys
 import os
 import time
+import threading
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich import box
+
 
 # Package Imports
 from core.process import Process
@@ -29,6 +31,7 @@ from memory.replacement import PageReplacementSimulator
 from concurrency.locks import Mutex
 from concurrency.semaphores import ProducerConsumerSimulation
 from concurrency.multithreading import RaceConditionDemo
+from concurrency.structures import ThreadSafeQueue
 from storage.disk_scheduler import DiskScheduler
 from storage.raid import RAIDSystem
 from storage.filesystem import VirtualFileSystem
@@ -50,24 +53,49 @@ def get_fresh_workload():
 
 def show_menu():
     menu_text = (
-        "[bold cyan]Modüller ve Simülasyon Seçenekleri:[/bold cyan]\n"
-        "  [bold green]1.[/bold green] CPU Zamanlama & Gantt Şeması (FCFS vs RR vs MLFQ) - [yellow]Modül 1, 2[/yellow]\n"
-        "  [bold green]2.[/bold green] Priority Inversion & PIP (Öncelik Mirası Deneyi) - [yellow]Modül 9, Zorluk[/yellow]\n"
-        "  [bold green]3.[/bold green] Adres Çevirisi, Sayfalama (Paging) & TLB Simülasyonu - [yellow]Modül 3, 5, 6[/yellow]\n"
-        "  [bold green]4.[/bold green] Segmentasyon & Sınır Güvenliği Aşım Kontrolü - [yellow]Modül 4[/yellow]\n"
-        "  [bold green]5.[/bold green] Sayfa Değiştirme (FIFO vs LRU Page Fault Analizi) - [yellow]Modül 7[/yellow]\n"
-        "  [bold green]6.[/bold green] Concurrency: Yarış Durumu (Race Condition) & Semafor (Producer-Consumer) - [yellow]Modül 8, 10, 11[/yellow]\n"
-        "  [bold green]7.[/bold green] Depolama: Disk Schedulers, RAID 0/1 & Journaled FS (Crash Consistency) - [yellow]Modül 12, 13, 14, 15[/yellow]\n"
-        "  [bold green]8.[/bold green] SSD vs HDD Performans Karşılaştırma Analizi - [yellow]Modül 16[/yellow]\n"
-        "  [bold green]9.[/bold green] TÜM Grafiksel PNG Raporlarını Yeniden Oluştur (Generate Plots)\n"
-        "  [bold green]10.[/bold green] Çapraz Bileşen Etkileşimi (Disk I/O Blocking) - [yellow]Modül 2, 12, Tasarım[/yellow]\n"
-        "  [bold green]11.[/bold green] Hata Senaryosu (OOM Killer / Bellek Tükenmesi) - [yellow]Modül 3, Tasarım[/yellow]\n"
-        "  [bold red]Q.[/bold red] Çıkış (Exit)"
+        "[bold cyan]===== MİNİ İŞLETİM SİSTEMİ SİMÜLATÖRÜ =====[/bold cyan]\n"
+        "[bold green]\\[1][/bold green] Modül 1 & 2: Süreç Yönetimi (PCB) ve CPU Planlama (FCFS, RR, MLFQ)\n"
+        "[bold green]\\[2][/bold green] Modül 3: Adres Çevirisi (Virtual to Physical)\n"
+        "[bold green]\\[3][/bold green] Modül 4: Segmentasyon (Segmentation)\n"
+        "[bold green]\\[4][/bold green] Modül 5 & 6: Sayfalama (Paging) ve TLB Simülasyonu\n"
+        "[bold green]\\[5][/bold green] Modül 7: Sayfa Değiştirme (FIFO vs LRU)\n"
+        "[bold green]\\[6][/bold green] Modül 8 & 9: Eşzamanlılık (Race Condition) ve Kilitler (Mutex)\n"
+        "[bold green]\\[7][/bold green] Modül 10 & 11: Semaforlar (Producer-Consumer) ve Eşzamanlı Veri Yapıları\n"
+        "[bold green]\\[8][/bold green] Modül 12: Disk Planlama (FCFS, SSTF)\n"
+        "[bold green]\\[9][/bold green] Modül 13: RAID (RAID 0 ve RAID 1)\n"
+        "[bold green]\\[10][/bold green] Modül 14 & 15: Dosya Sistemi Ağacı ve Çökme Tutarlılığı (Journaling)\n"
+        "[bold green]\\[11][/bold green] Modül 16: SSD vs HDD Analizi\n"
+        "[bold red]\\[0][/bold red] Çıkış"
     )
-    console.print(Panel(menu_text, border_style="cyan", title="[bold white]=== Game Console OS Simulator Dashboard ===[/bold white]", box=box.ROUNDED))
+    console.print(Panel(menu_text, border_style="cyan", title="[bold white]OS Simulator[/bold white]", box=box.ROUNDED))
 
-def handle_scheduling():
-    console.print("\n[bold yellow]>>> Hız Testi: CPU Planlama Algoritmaları Karşılaştırma Deneyi...[/bold yellow]")
+def handle_pcb_and_scheduling():
+    console.print("\n[bold yellow]>>> Modül 1 & 2: Süreç Yönetimi (PCB) ve CPU Planlama (FCFS, RR, MLFQ)...[/bold yellow]")
+    
+    # 1. Show PCB table
+    procs = get_fresh_workload()
+    table = Table(title="Süreç Kontrol Blokları (PCB - Process Control Blocks)", box=box.ROUNDED)
+    table.add_column("PID", style="cyan")
+    table.add_column("Süreç Adı", style="magenta")
+    table.add_column("Varış Zamanı", style="green")
+    table.add_column("Burst Süresi", style="yellow")
+    table.add_column("Öncelik", style="blue")
+    table.add_column("Gereken Bellek", style="white")
+    table.add_column("Durum", style="cyan")
+    
+    for p in procs:
+        prio_desc = f"{p.priority} (Düşük)"
+        if p.priority == 1:
+            prio_desc = f"{p.priority} (Yüksek)"
+        elif p.priority == 2:
+            prio_desc = f"{p.priority} (Orta)"
+        table.add_row(
+            str(p.pid), p.name, f"{p.arrival_time} tick", f"{p.burst_time} tick", prio_desc, f"{p.memory_required} MB", p.state
+        )
+    console.print(table)
+    
+    # 2. Run CPU Scheduling algorithms
+    console.print("\n[bold yellow]>>> CPU Planlama Algoritmaları Karşılaştırma Deneyi...[/bold yellow]")
     
     log_messages = []
     def dummy_log(msg):
@@ -89,12 +117,12 @@ def handle_scheduling():
     PerformancePlotter.plot_scheduler_gantt(fcfs_procs, rr_procs, mlfq_procs, "gantt_chart.png")
     
     # Stats table
-    table = Table(title="CPU Planlama Algoritmaları İstatistik Raporu (FCFS vs RR vs MLFQ)", box=box.DOUBLE)
-    table.add_column("Algoritma (Scheduler)", style="cyan", no_wrap=True)
-    table.add_column("Ort. Bekleme (Waiting)", style="magenta")
-    table.add_column("Ort. Yanıt (Turnaround)", style="green")
-    table.add_column("Bağlam Değişimi (CS)", style="yellow")
-    table.add_column("Tasarım Rolü ve Trade-off", style="white")
+    stats_table = Table(title="CPU Planlama Algoritmaları İstatistik Raporu (FCFS vs RR vs MLFQ)", box=box.DOUBLE)
+    stats_table.add_column("Algoritma (Scheduler)", style="cyan", no_wrap=True)
+    stats_table.add_column("Ort. Bekleme (Waiting)", style="magenta")
+    stats_table.add_column("Ort. Yanıt (Turnaround)", style="green")
+    stats_table.add_column("Bağlam Değişimi (CS)", style="yellow")
+    stats_table.add_column("Tasarım Rolü ve Trade-off", style="white")
     
     def get_stats(procs):
         avg_w = sum(p.waiting_time for p in procs) / len(procs)
@@ -105,44 +133,81 @@ def handle_scheduling():
     rr_w, rr_t = get_stats(rr_procs)
     mlfq_w, mlfq_t = get_stats(mlfq_procs)
     
-    table.add_row("FCFS (Baseline)", fcfs_w, fcfs_t, str(fcfs_cs), "Basit, adil ama interaktif gecikme yüksek")
-    table.add_row("Round Robin (RR)", rr_w, rr_t, str(rr_cs), "Zaman paylaşımlı, bağlam değişimi orta düzey")
-    table.add_row("MLFQ (Enhanced)", mlfq_w, mlfq_t, str(mlfq_cs), "En iyi interaktivite; GPU/Input korur, karmaşık")
+    stats_table.add_row("FCFS (Baseline)", fcfs_w, fcfs_t, str(fcfs_cs), "Basit, adil ama interaktif gecikme yüksek")
+    stats_table.add_row("Round Robin (RR)", rr_w, rr_t, str(rr_cs), "Zaman paylaşımlı, bağlam değişimi orta düzey")
+    stats_table.add_row("MLFQ (Enhanced)", mlfq_w, mlfq_t, str(mlfq_cs), "En iyi interaktivite; GPU/Input korur, karmaşık")
     
-    console.print(table)
+    console.print(stats_table)
     console.print("[bold green][OS LOG] Başarı: Gantt Şeması 'gantt_chart.png' olarak kaydedildi.[/bold green]")
 
-def handle_priority_inversion():
-    console.print("\n[bold yellow]>>> Öncelik Terslenmesi (Priority Inversion) ve Öncelik Mirası (PIP) Simülasyonu...[/bold yellow]")
+def handle_address_translation():
+    console.print("\n[bold yellow]>>> Modül 3: Adres Çevirisi (Virtual to Physical)...[/bold yellow]")
     
-    log_messages = []
-    def console_log(msg):
-        log_messages.append(msg)
-        console.print(msg)
+    mem_manager = MemoryManager(512, frame_size_kb=4)
+    p = Process(1, "Game Level Loader", 0, 10, 1, 64)
+    # Manually map some virtual pages to physical frames to show direct translation
+    p.page_table = {0: 3, 1: 5, 2: 8, 3: 12}
+    
+    # Check address translations for various virtual addresses (4KB page size)
+    virtual_addresses = [0x0500, 0x1005, 0x205A, 0x30AC, 0x4500]
+    
+    table = Table(title="Sanal - Fiziksel Adres Çevirisi", box=box.ROUNDED)
+    table.add_column("Sanal Adres (VA)", style="cyan")
+    table.add_column("Sanal Sayfa No", style="magenta")
+    table.add_column("Ofset (Offset)", style="yellow")
+    table.add_column("Sorgu Sonucu", style="orange3")
+    table.add_column("Fiziksel Çerçeve No (PFN)", style="green")
+    table.add_column("Fiziksel Adres (PA)", style="green")
+    
+    for va in virtual_addresses:
+        res = mem_manager.translate_address(p, va, offset_bits=12)
+        page_num = va // 4096
+        offset = va % 4096
+        if res["success"]:
+            pfn = str(res["frame_number"])
+            pa = hex(res["physical_address"])
+            status = "[bold green]Hit[/bold green]"
+        else:
+            pfn = "N/A"
+            pa = "N/A"
+            status = "[bold red]Page Fault[/bold red]"
+            
+        table.add_row(hex(va), str(page_num), hex(offset), status, pfn, pa)
         
-    # Unsync scenario (without PIP)
-    inv_no_pip, dur_no_pip = simulate_priority_inversion_scenario(use_inheritance=False, log_callback=console_log)
-    
-    # Sync scenario (with PIP)
-    inv_pip, dur_pip = simulate_priority_inversion_scenario(use_inheritance=True, log_callback=console_log)
-    
-    # Display comparison
-    table = Table(title="Priority Inversion ve Priority Inheritance Deney Raporu", box=box.ROUNDED)
-    table.add_column("Senaryo", style="cyan")
-    table.add_column("Yüksek Öncelikli H Bitiş Zamanı", style="red")
-    table.add_column("Toplam Süre (Ticks)", style="yellow")
-    table.add_column("Diagnostic Durum", style="white")
-    
-    h_end_no_pip = next((p.end_time for p in inv_no_pip if p.pid == 12), "Kilitlendi / Starved")
-    h_end_pip = next((p.end_time for p in inv_pip if p.pid == 12), "N/A")
-    
-    table.add_row("PIP Olmadan (Tasarım Açığı)", str(h_end_no_pip), f"{dur_no_pip} tick", "[bold red]Kilitlenme (Gamepad/Engine Kilitli)[/bold red]")
-    table.add_row("PIP İle (Öncelik Mirası Aktif)", f"{h_end_pip} (Kurtarıldı)", f"{dur_pip} tick", "[bold green]Sorun Çözüldü (Normal Akış)[/bold green]")
-    
     console.print(table)
+    console.print("[OS LOG] Sayfa Boyutu 4KB (12 bit ofset) olduğundan, sanal adresin ilk bitleri Sayfa Numarasını, son 12 biti ofseti belirtir.")
+
+def handle_segmentation():
+    console.print("\n[bold yellow]>>> Modül 4: Segmentasyon (Segmentation)...[/bold yellow]")
+    
+    seg_sys = SegmentationSystem(512)
+    p = Process(2, "FPS Player Entity", 0, 10, 1, 64)
+    seg_sys.initialize_segments(p)
+    
+    # Display Segment Table
+    table = Table(title=f"Proses '{p.name}' Segment Tablosu", box=box.ROUNDED)
+    table.add_column("Segment Adı", style="cyan")
+    table.add_column("Fiziksel Başlangıç Adresi (Base)", style="green")
+    table.add_column("Boyut Limiti (Limit)", style="yellow")
+    table.add_column("İzin", style="magenta")
+    
+    for name, seg in p.segment_table.items():
+        perms = "R/W (Yazılabilir)" if seg.is_writable else "R (Sadece Okunabilir)"
+        table.add_row(name, hex(seg.base), f"{seg.limit} byte", perms)
+    console.print(table)
+    
+    # Translation 1: Valid access to Stack
+    offset_valid = 1024
+    res_valid = seg_sys.translate(p, "Stack", offset_valid)
+    console.print(f"[OS LOG] [SEGMENTATION] İstek: Stack, Offset: {offset_valid} -> Sonuç: [bold green]BAŞARILI[/bold green]. Fiziksel Adres: {res_valid.get('physical_address')}")
+    
+    # Translation 2: Out of bounds access to Stack (Limit is 16KB = 16384 bytes)
+    offset_invalid = 20000
+    res_invalid = seg_sys.translate(p, "Stack", offset_invalid)
+    console.print(f"[OS LOG] [SEGMENTATION FAULT] İstek: Stack, Offset: {offset_invalid} -> Sonuç: [bold red]{res_invalid.get('reason')}[/bold red]")
 
 def handle_paging_tlb():
-    console.print("\n[bold yellow]>>> Sanal Adres Çevirisi, Sayfalama (Paging) ve TLB Erişim Simülasyonu...[/bold yellow]")
+    console.print("\n[bold yellow]>>> Modül 5 & 6: Sayfalama (Paging) ve TLB Simülasyonu...[/bold yellow]")
     
     mem_manager = MemoryManager(512, frame_size_kb=4)
     paging_sys = PagingSystem(page_size_kb=4)
@@ -152,8 +217,6 @@ def handle_paging_tlb():
     paging_sys.initialize_page_table(p)
     
     # Reference some virtual memory addresses (each offset 4096 bytes)
-    # Addresses map to virtual pages:
-    # 0x1005 (Page 1), 0x205A (Page 2), 0x1005 (Page 1), 0x30AC (Page 3), 0x205A (Page 2), 0x51AF (Page 5)
     virtual_addresses = [0x1005, 0x205A, 0x1005, 0x30AC, 0x205A, 0x51AF]
     
     table = Table(title=f"Sanal Adres Çeviri Tablosu (Page Size: 4KB, TLB Entries: {tlb_cache.max_entries})", box=box.ROUNDED)
@@ -205,38 +268,8 @@ def handle_paging_tlb():
     console.print(table)
     console.print(f"[OS LOG] [TLB İSTATİSTİK] Toplam Hit: {tlb_cache.hits} | Miss: {tlb_cache.misses} | [bold yellow]TLB Hit Oranı: {tlb_cache.hit_ratio*100:.1f}%[/bold yellow]")
 
-def handle_segmentation():
-    console.print("\n[bold yellow]>>> Segmentasyon ve Segment Sınır Aşım (Segmentation Fault) Güvenlik Simülasyonu...[/bold yellow]")
-    
-    seg_sys = SegmentationSystem(512)
-    p = Process(2, "FPS Player Entity", 0, 10, 1, 64)
-    
-    seg_sys.initialize_segments(p)
-    
-    # Display Segment Table
-    table = Table(title=f"Proses '{p.name}' Segment Tablosu", box=box.ROUNDED)
-    table.add_column("Segment Adı", style="cyan")
-    table.add_column("Fiziksel Başlangıç Adresi (Base)", style="green")
-    table.add_column("Boyut Limiti (Limit)", style="yellow")
-    table.add_column("İzin", style="magenta")
-    
-    for name, seg in p.segment_table.items():
-        perms = "R/W (Yazılabilir)" if seg.is_writable else "R (Sadece Okunabilir)"
-        table.add_row(name, hex(seg.base), f"{seg.limit} byte", perms)
-    console.print(table)
-    
-    # Translation 1: Valid access to Stack
-    offset_valid = 1024
-    res_valid = seg_sys.translate(p, "Stack", offset_valid)
-    console.print(f"[OS LOG] [SEGMENTATION] İstek: Stack, Offset: {offset_valid} $\\rightarrow$ Sonuç: [bold green]BAŞARILI[/bold green]. Fiziksel Adres: {res_valid.get('physical_address')}")
-    
-    # Translation 2: Out of bounds access to Stack (Limit is 16KB = 16384 bytes)
-    offset_invalid = 20000
-    res_invalid = seg_sys.translate(p, "Stack", offset_invalid)
-    console.print(f"[OS LOG] [SEGMENTATION FAULT] İstek: Stack, Offset: {offset_invalid} $\\rightarrow$ Sonuç: [bold red]{res_invalid.get('reason')}[/bold red]")
-
 def handle_page_replacement():
-    console.print("\n[bold yellow]>>> Sayfa Değiştirme (Page Replacement) FIFO vs LRU Karşılaştırma Deneyi...[/bold yellow]")
+    console.print("\n[bold yellow]>>> Modül 7: Sayfa Değiştirme (FIFO vs LRU)...[/bold yellow]")
     
     # Virtual page reference string
     ref_string = [1, 3, 0, 3, 5, 6, 3, 1, 3, 2, 1, 4, 5, 2]
@@ -263,21 +296,85 @@ def handle_page_replacement():
     console.print(table)
     console.print("[bold green][OS LOG] Başarı: Sayfa Değiştirme grafiği 'page_faults.png' olarak kaydedildi.[/bold green]")
 
-def handle_concurrency_semaphores():
-    console.print("\n[bold yellow]>>> Concurrency: Çoklu Threading, Yarış Durumu (Race Condition) ve Semafor Simülasyonu...[/bold yellow]")
+def handle_concurrency_and_locks():
+    console.print("\n[bold yellow]>>> Modül 8 & 9: Eşzamanlılık (Race Condition) ve Kilitler (Mutex)...[/bold yellow]")
     
-    # 1. Race Condition Demo
+    # 1. Race Condition and Mutex Lock/Unlock Demo (Module 8)
     demo = RaceConditionDemo()
-    results = demo.run_demo(num_threads=4, iterations=1000, log_callback=console.print)
+    demo.run_demo(num_threads=4, iterations=1000, log_callback=console.print)
     
-    # 2. Semaphore Producer Consumer Demo
+    # 2. Mutex Class Simulation (Module 9)
+    console.print("\n[bold cyan]--- Özel Mutex Sınıfı Kilit/Açma Simülasyonu (Module 9) ---[/bold cyan]")
+    mutex = Mutex("Gamepad Buffer Mutex")
+    
+    mutex.lock("Thread-1", console.print)
+    mutex.lock("Thread-2", console.print)
+    mutex.unlock(console.print)
+    mutex.unlock(console.print)
+    
+    # 3. Priority Inversion and PIP simulation (Module 9)
+    console.print("\n[bold cyan]--- Öncelik Mirası (Priority Inheritance Protocol) Simülasyonu (Module 9) ---[/bold cyan]")
+    
+    log_messages = []
+    def console_log(msg):
+        log_messages.append(msg)
+        console.print(msg)
+        
+    # Unsync scenario (without PIP)
+    inv_no_pip, dur_no_pip = simulate_priority_inversion_scenario(use_inheritance=False, log_callback=console_log)
+    
+    # Sync scenario (with PIP)
+    inv_pip, dur_pip = simulate_priority_inversion_scenario(use_inheritance=True, log_callback=console_log)
+    
+    # Display comparison
+    table = Table(title="Priority Inversion ve Priority Inheritance Deney Raporu", box=box.ROUNDED)
+    table.add_column("Senaryo", style="cyan")
+    table.add_column("Yüksek Öncelikli H Bitiş Zamanı", style="red")
+    table.add_column("Toplam Süre (Ticks)", style="yellow")
+    table.add_column("Diagnostic Durum", style="white")
+    
+    h_end_no_pip = next((p.end_time for p in inv_no_pip if p.pid == 12), "Kilitlendi / Starved")
+    h_end_pip = next((p.end_time for p in inv_pip if p.pid == 12), "N/A")
+    
+    table.add_row("PIP Olmadan (Tasarım Açığı)", str(h_end_no_pip), f"{dur_no_pip} tick", "[bold red]Kilitlenme (Gamepad/Engine Kilitli)[/bold red]")
+    table.add_row("PIP İle (Öncelik Mirası Aktif)", f"{h_end_pip} (Kurtarıldı)", f"{dur_pip} tick", "[bold green]Sorun Çözüldü (Normal Akış)[/bold green]")
+    
+    console.print(table)
+
+def handle_semaphores_and_structures():
+    console.print("\n[bold yellow]>>> Modül 10 & 11: Semaforlar (Producer-Consumer) ve Eşzamanlı Veri Yapıları...[/bold yellow]")
+    
+    # 1. Semaphore Producer Consumer Demo (Module 10)
     sim = ProducerConsumerSimulation(capacity=4)
     sim.run(duration=2.5, log_callback=console.print)
-
-def handle_storage_journaling():
-    console.print("\n[bold yellow]>>> Depolama: Disk Schedulers, RAID 0/1 & Journaled File System (Crash Consistency)...[/bold yellow]")
     
-    # 1. Disk Head Scheduling
+    # 2. ThreadSafeQueue Demo (Module 11)
+    console.print("\n[bold cyan]--- Eşzamanlı Veri Yapıları (ThreadSafeQueue) Simülasyonu (Module 11) ---[/bold cyan]")
+    queue = ThreadSafeQueue(capacity=3)
+    
+    def queue_producer():
+        for i in range(5):
+            time.sleep(0.1)
+            queue.enqueue(f"GameAssetData#{i+1}", log_callback=console.print)
+            
+    def queue_consumer():
+        for _ in range(5):
+            time.sleep(0.2)
+            queue.dequeue(log_callback=console.print)
+            
+    p_thread = threading.Thread(target=queue_producer)
+    c_thread = threading.Thread(target=queue_consumer)
+    
+    p_thread.start()
+    c_thread.start()
+    
+    p_thread.join()
+    c_thread.join()
+    console.print("[OS LOG] [KUYRUK] Eşzamanlı veri yapısı (ThreadSafeQueue) simülasyonu başarıyla tamamlandı.")
+
+def handle_disk_scheduling():
+    console.print("\n[bold yellow]>>> Modül 12: Disk Planlama (FCFS, SSTF)...[/bold yellow]")
+    
     requests = [98, 183, 37, 122, 14, 124, 65, 67]
     head_start = 53
     
@@ -296,10 +393,11 @@ def handle_storage_journaling():
     disk_table.add_row("FCFS (Baseline)", " -> ".join(map(str, fcfs_path)), f"{fcfs_seek} silindir", "Referans")
     disk_table.add_row("SSTF (Enhanced)", " -> ".join(map(str, sstf_path)), f"{sstf_seek} silindir", impr)
     console.print(disk_table)
-    console.print("[bold green][OS LOG] Başarı: Disk kafası hareket şeması 'disk_scheduling.png' olarak kaydedildi.[/bold green]\n")
+    console.print("[bold green][OS LOG] Başarı: Disk kafası hareket şeması 'disk_scheduling.png' olarak kaydedildi.[/bold green]")
+
+def handle_raid_simulation():
+    console.print("\n[bold yellow]>>> Modül 13: RAID (RAID 0 ve RAID 1)...[/bold yellow]")
     
-    # 2. RAID 0 & RAID 1 Simulation
-    console.print("[bold yellow]--- RAID 0 vs RAID 1 Performans ve Güvenilirlik Testi ---[/bold yellow]")
     raid = RAIDSystem(size_blocks=16)
     
     texture_data = "4K_ULTRA_TEXTURE_MAP_DATA_XYZ"
@@ -324,11 +422,26 @@ def handle_storage_journaling():
     # RAID 1 Rebuild
     success, msg = raid.recover_raid_1()
     console.print(f"[OS LOG] [RAID 1] {msg}")
-    console.print(f"[OS LOG] [RAID 1] Kurtarma Sonrası Okuma: {raid.read_raid_1('level1_tex')}\n")
+    console.print(f"[OS LOG] [RAID 1] Kurtarma Sonrası Okuma: {raid.read_raid_1('level1_tex')}")
+
+def handle_fs_and_journaling():
+    console.print("\n[bold yellow]>>> Modül 14 & 15: Dosya Sistemi Ağacı ve Çökme Tutarlılığı (Journaling)...[/bold yellow]")
     
-    # 3. Journaling Filesystem
-    console.print("[bold yellow]--- Journaled Filesystem ve Crash Consistency / Recovery ---[/bold yellow]")
+    # 1. Virtual File System Tree (Module 14)
+    console.print("[bold cyan]--- Dosya Sistemi Ağacı (Virtual File System) Yapısı (Module 14) ---[/bold cyan]")
     vfs = VirtualFileSystem()
+    
+    # Create some dummy files/folders to show structure
+    vfs.mkdir("/system")
+    vfs.mkdir("/user/saves")
+    vfs.create_file("/system/kernel.sys", "KERNEL_INIT")
+    vfs.create_file("/user/saves/auto_save.dat", "LEVEL:5,HP:100")
+    
+    console.print("[OS LOG] Dosya sistemi hiyerarşisi oluşturuldu:")
+    console.print(vfs.get_structure())
+    
+    # 2. Journaling and Crash Consistency (Module 15)
+    console.print("\n[bold cyan]--- Çökme Tutarlılığı (Journaling) ve Recovery Deneyi (Module 15) ---[/bold cyan]")
     jfs = JournaledFileSystem(vfs)
     
     # Transaction 1: Successful write
@@ -347,7 +460,7 @@ def handle_storage_journaling():
     console.print(vfs.get_structure())
 
 def handle_ssd_hdd():
-    console.print("\n[bold yellow]>>> SSD vs HDD Donanım ve Erişim Süresi Karşılaştırma Analizi...[/bold yellow]")
+    console.print("\n[bold yellow]>>> Modül 16: SSD vs HDD Analizi...[/bold yellow]")
     
     requests = [12, 140, 85, 30, 195, 42, 10, 110, 64, 180]
     
@@ -413,33 +526,33 @@ def main():
     while True:
         try:
             show_menu()
-            choice = console.input("\n[bold yellow]Seçiminiz (1-11 veya Q): [/bold yellow]").strip().upper()
+            choice = console.input("\n[bold yellow]Seçiminiz (0-11): [/bold yellow]").strip()
             
-            if choice == "Q":
+            if choice == "0":
                 console.print("\n[bold green]Simulator Kapatılıyor. İyi çalışmalar![/bold green]\n")
                 break
             elif choice == "1":
-                handle_scheduling()
+                handle_pcb_and_scheduling()
             elif choice == "2":
-                handle_priority_inversion()
+                handle_address_translation()
             elif choice == "3":
-                handle_paging_tlb()
-            elif choice == "4":
                 handle_segmentation()
+            elif choice == "4":
+                handle_paging_tlb()
             elif choice == "5":
                 handle_page_replacement()
             elif choice == "6":
-                handle_concurrency_semaphores()
+                handle_concurrency_and_locks()
             elif choice == "7":
-                handle_storage_journaling()
+                handle_semaphores_and_structures()
             elif choice == "8":
-                handle_ssd_hdd()
+                handle_disk_scheduling()
             elif choice == "9":
-                generate_all_plots()
+                handle_raid_simulation()
             elif choice == "10":
-                simulate_io_blocking_scenario(log_callback=console.print)
+                handle_fs_and_journaling()
             elif choice == "11":
-                simulate_oom_killer_scenario(log_callback=console.print)
+                handle_ssd_hdd()
             else:
                 console.print("\n[bold red]Geçersiz Seçim! Lütfen listeden bir rakam girin.[/bold red]")
                 
